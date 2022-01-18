@@ -1,20 +1,16 @@
+using BilletAPI.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-
+using Microsoft.EntityFrameworkCore;
+using BilletAPI.Models.Repository;
+using BilletAPI.Models.DataManager;
 namespace BilletAPI
 {
     public class Startup
@@ -26,31 +22,56 @@ namespace BilletAPI
 
         public IConfiguration Configuration { get; }
 
+        public readonly string _policyName = "CorsPolicy";
+
+
+
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
+            string conStr = Configuration.GetConnectionString("Conn");
+            //services.AddDbContext<SKPDbContext>(options => options.UseMySQL(Configuration.GetConnectionString("skpDb")));
+            //services.AddDbContext<SKPDbContext>(options => options.UseMySql(conStr, ServerVersion.AutoDetect(conStr)));
+            services.AddDbContext<BilletSystemAPIContext>(options => options.UseMySql(conStr, MariaDbServerVersion.AutoDetect(conStr)));
+            services.AddControllers();
+
+            services.AddCors(opt =>
+            {
+                opt.AddPolicy(name: _policyName, builder =>
                 {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = Configuration["Jwt:Issuer"],
-                        ValidAudience = Configuration["Jwt:Audience"],
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration ["Jwt:Key"]))
-                    };
+                    builder.AllowAnyOrigin()
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
                 });
+            });
+
+            services.AddScoped<IDataRepository<User>, UserManager>();
+            services.AddScoped<IDataRepository<Event>, EventManager>();
+            services.AddScoped<IDataRepository<Ticket>, TicketManager>();
+            services.AddScoped<IDataRepository<ZipCode>, ZipCodeManager>();
+
+            //services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            //    .AddJwtBearer(options =>
+            //    {
+            //        options.TokenValidationParameters = new TokenValidationParameters
+            //        {
+            //            ValidateIssuer = true,
+            //            ValidateAudience = true,
+            //            ValidateLifetime = true,
+            //            ValidateIssuerSigningKey = true,
+            //            ValidIssuer = Configuration["Jwt:Issuer"],
+            //            ValidAudience = Configuration["Jwt:Audience"],
+            //            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration ["Jwt:Key"]))
+            //        };
+            //    });
 
 
             services.AddMvc();
-            services.AddControllers();
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "BilletAPI", Version = "v1" });
             });
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -70,6 +91,8 @@ namespace BilletAPI
             app.UseAuthentication();
 
             app.UseAuthorization();
+
+            app.UseCors(_policyName);
 
             app.UseEndpoints(endpoints =>
             {
